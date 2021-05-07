@@ -13,11 +13,22 @@ import android.view.ViewGroup;
 public class TouchBlocker extends ViewGroup {
     public final static String TAG = "TouchBlocker";
 
+    private boolean blockAllTouch = false;
+    private boolean blockVerticalInteraction = false;
+    private boolean blockHorizontalInteraction = false;
+
     public void setBlockAllTouch(boolean blockAllTouch) {
         this.blockAllTouch = blockAllTouch;
     }
 
-    private boolean blockAllTouch = false;
+    public void setBlockVerticalInteraction(boolean blockVerticalInteraction) {
+        this.blockVerticalInteraction = blockVerticalInteraction;
+    }
+
+    public void setBlockHorizontalInteraction(boolean blockHorizontalInteraction) {
+        this.blockHorizontalInteraction = blockHorizontalInteraction;
+    }
+
     public TouchBlocker(Context context) {
         super(context);
         setTag(TAG);
@@ -38,25 +49,68 @@ public class TouchBlocker extends ViewGroup {
 
     }
 
+    private float xDistance, yDistance, lastX, lastY;
+
+    int lastEvent = -1;
+    boolean isLastEventIntercepted = false;
+
     @Override
     public boolean onInterceptTouchEvent(MotionEvent ev) {
-        Log.d("InteractableView","TouchBlocker onInterceptTouchEvent action = " + ev.getAction()
-        + " scrollY = " + getChildAt(0).getScrollY());
         if (blockAllTouch) {
             getParent().requestDisallowInterceptTouchEvent(true);
+        } else if (blockVerticalInteraction || blockHorizontalInteraction) {
+            switch (ev.getAction()) {
+            case MotionEvent.ACTION_DOWN:
+                xDistance = yDistance = 0f;
+                lastX = ev.getX();
+                lastY = ev.getY();
+                break;
+
+            case MotionEvent.ACTION_MOVE:
+                final float curX = ev.getX();
+                final float curY = ev.getY();
+                xDistance += Math.abs(curX - lastX);
+                yDistance += Math.abs(curY - lastY);
+                lastX = curX;
+                lastY = curY;
+
+                if(isLastEventIntercepted && lastEvent == MotionEvent.ACTION_MOVE){
+                    getParent().requestDisallowInterceptTouchEvent(true);
+                    return super.onInterceptTouchEvent(ev);
+                }
+
+                float larger = 0, smaller = 0;
+
+                if (blockVerticalInteraction) {
+                    larger = yDistance;
+                    smaller = xDistance;
+                } else if (blockHorizontalInteraction) {
+                    larger = xDistance;
+                    smaller = yDistance;
+                }
+
+                if (larger > smaller) {
+                    isLastEventIntercepted = true;
+                    lastEvent = MotionEvent.ACTION_MOVE;
+                    getParent().requestDisallowInterceptTouchEvent(true);
+                    return super.onInterceptTouchEvent(ev);
+                }
+                break;
+            }
+
+            lastEvent=ev.getAction();
+            isLastEventIntercepted=false;
         }
+        
         return super.onInterceptTouchEvent(ev);
     }
 
     @Override
     public boolean onTouchEvent(MotionEvent ev) {
-        Log.d("InteractableView","TouchBlocker onTouchEvent action = " + ev.getAction());
-
         return super.onTouchEvent(ev);
     }
 
     public boolean isAtTop() {
         return getChildAt(0).getScrollY() == 0;
     }
-
 }
